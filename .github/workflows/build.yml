@@ -103,6 +103,86 @@ jobs:
           name: ${{ env.PROJECT_NAME }}-${{ matrix.platform }}
           path: dists/*
 
+  appimage:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.PROJECT_NAME }}-linux
+          path: linux-artifact
+
+      - name: Extract Linux build
+        run: |
+          cd linux-artifact
+          tar xjf *.tar.bz2
+          ls -la
+
+      - name: Create AppImage
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          # Find the extracted app directory
+          APP_DIR=$(find linux-artifact -maxdepth 1 -type d -name "CouncilOfChalcedon-*" | head -1)
+          echo "App directory: $APP_DIR"
+
+          # Create AppDir structure
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+
+          # Copy application files
+          cp -r "$APP_DIR"/* AppDir/usr/bin/
+
+          # Copy icon
+          cp icon.png AppDir/usr/share/icons/hicolor/256x256/apps/council-of-chalcedon.png
+          cp icon.png AppDir/council-of-chalcedon.png
+
+          # Create desktop file
+          cat > AppDir/council-of-chalcedon.desktop << 'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=Council of Chalcedon
+          Comment=An educational kinetic novel re-enacting the Fourth Ecumenical Council (451 AD)
+          Exec=CouncilOfChalcedon.sh
+          Icon=council-of-chalcedon
+          Categories=Game;Education;
+          Terminal=false
+          EOF
+
+          cp AppDir/council-of-chalcedon.desktop AppDir/usr/share/applications/
+
+          # Create AppRun script
+          cat > AppDir/AppRun << 'EOF'
+          #!/bin/bash
+          SELF=$(readlink -f "$0")
+          HERE=${SELF%/*}
+          export PATH="${HERE}/usr/bin:${PATH}"
+          cd "${HERE}/usr/bin"
+          exec ./CouncilOfChalcedon.sh "$@"
+          EOF
+          chmod +x AppDir/AppRun
+
+          # Download appimagetool
+          wget -q "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x appimagetool-x86_64.AppImage
+
+          # Create AppImage
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir "CouncilOfChalcedon-${VERSION}-linux.AppImage"
+
+          ls -la *.AppImage
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PROJECT_NAME }}-appimage
+          path: "*.AppImage"
+
   msi:
     needs: [version, build]
     runs-on: windows-latest
@@ -215,7 +295,7 @@ jobs:
           path: "*.msi"
 
   release:
-    needs: [version, build, msi]
+    needs: [version, build, appimage, msi]
     runs-on: macos-latest
     permissions:
       contents: write
@@ -243,6 +323,7 @@ jobs:
           find artifacts -name "*.tar.bz2" -exec cp {} release/ \;
           find artifacts -name "*.dmg" -exec cp {} release/ \;
           find artifacts -name "*.msi" -exec cp {} release/ \;
+          find artifacts -name "*.AppImage" -exec cp {} release/ \;
           find artifacts -name "*.app" -type d -exec sh -c 'cd "$(dirname "{}")" && zip -r "../$(basename "{}").zip" "$(basename "{}")"' \;
 
           ls -la release/
@@ -427,7 +508,8 @@ jobs:
             - **Windows (Installer)**: `*-win.msi` - Recommended, creates Start Menu and Desktop shortcuts
             - **Windows (Portable)**: `*-win.zip` - No installation required
             - **macOS**: `*-macOS.dmg` (signed and notarized)
-            - **Linux**: `*-linux.tar.bz2`
+            - **Linux (AppImage)**: `*-linux.AppImage` - Recommended, runs on any distro
+            - **Linux (Archive)**: `*-linux.tar.bz2` - Extract and run
 
             ### macOS Installation via Homebrew
             ```bash
