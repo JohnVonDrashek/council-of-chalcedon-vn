@@ -91,6 +91,7 @@ jobs:
 
       - name: Sign and Notarize macOS build
         if: env.CERTIFICATE_P12_BASE64 != ''
+        continue-on-error: true
         env:
           CERTIFICATE_P12_BASE64: ${{ secrets.CERTIFICATE_P12_BASE64 }}
           CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
@@ -168,13 +169,19 @@ jobs:
           prerelease: false
 
       - name: Update Homebrew Tap
-        if: success()
+        if: success() && hashFiles('release/*.dmg') != ''
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           # Get the DMG URL and SHA
           VERSION="${{ steps.version.outputs.version }}"
           DMG_NAME="${{ env.PROJECT_NAME }}-${VERSION}-macOS.dmg"
+
+          # Check if DMG exists
+          if [ ! -f "release/${DMG_NAME}" ]; then
+            echo "No DMG found, skipping Homebrew update"
+            exit 0
+          fi
           DMG_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/${DMG_NAME}"
 
           # Calculate SHA256 of the DMG
