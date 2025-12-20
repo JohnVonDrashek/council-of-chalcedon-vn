@@ -7,6 +7,7 @@
 [![Ren'Py](https://img.shields.io/badge/Ren'Py-8.0+-red.svg)](https://www.renpy.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://www.renpy.org/)
+[![GitHub Release](https://img.shields.io/github/v/release/JohnVonDrashek/council-of-chalcedon-vn)](https://github.com/JohnVonDrashek/council-of-chalcedon-vn/releases/latest)
 
 An educational kinetic novel re-enacting the Fourth Ecumenical Council (451 AD). Experience history through the actual words of the bishops, emperors, and legates who shaped Christian doctrine.
 
@@ -29,6 +30,29 @@ https://www.newadvent.org/fathers/3811.htm
 - **Documentary narration** providing historical context
 - **Verbatim quotes** from the council records
 
+## Installation
+
+### macOS (Homebrew)
+
+The easiest way to install on macOS is via Homebrew:
+
+```bash
+brew tap JohnVonDrashek/tap
+brew install --cask council-of-chalcedon
+```
+
+The app is signed and notarized by Apple.
+
+### Manual Download
+
+Download the latest release for your platform from the [Releases page](https://github.com/JohnVonDrashek/council-of-chalcedon-vn/releases/latest):
+
+| Platform | File |
+|----------|------|
+| **Windows** | `CouncilOfChalcedon-*-win.zip` |
+| **macOS** | `CouncilOfChalcedon-*-macOS.dmg` |
+| **Linux** | `CouncilOfChalcedon-*-linux.tar.bz2` |
+
 ## Screenshots
 
 <p align="center">
@@ -50,7 +74,9 @@ https://www.newadvent.org/fathers/3811.htm
 | **Empress Pulcheria** | Devout empress, champion of orthodoxy |
 | **Anatolius** | Patriarch of Constantinople |
 
-## Running the Project
+## Development
+
+To run from source:
 
 1. Install [Ren'Py](https://www.renpy.org/latest.html)
 2. Clone this repository
