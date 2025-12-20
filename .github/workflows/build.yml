@@ -162,6 +162,24 @@ jobs:
           IDENTITY=$(security find-identity -v -p codesigning $KEYCHAIN_PATH | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)".*/\1/')
           echo "Signing with: $IDENTITY"
 
+          # Create entitlements file for Ren'Py/Python
+          cat > entitlements.plist << 'ENTITLEMENTS'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>com.apple.security.cs.allow-jit</key>
+            <true/>
+            <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+            <true/>
+            <key>com.apple.security.cs.disable-library-validation</key>
+            <true/>
+            <key>com.apple.security.automation.apple-events</key>
+            <true/>
+          </dict>
+          </plist>
+          ENTITLEMENTS
+
           # Find and extract the mac zip to get the .app
           MAC_ZIP=$(find artifacts -name "*-mac.zip" | head -1)
           if [ -n "$MAC_ZIP" ]; then
@@ -173,8 +191,42 @@ jobs:
             echo "Found app: $MAC_APP"
 
             if [ -n "$MAC_APP" ]; then
-              # Sign the app
-              codesign --force --deep --sign "$IDENTITY" --options runtime "$MAC_APP"
+              echo "Signing all binaries in the app bundle..."
+
+              # Remove any existing signatures and xattr quarantine flags
+              xattr -cr "$MAC_APP"
+
+              # Sign all .so files (Python extensions)
+              find "$MAC_APP" -name "*.so" -type f | while read -r lib; do
+                echo "Signing: $lib"
+                codesign --force --sign "$IDENTITY" --options runtime --entitlements entitlements.plist "$lib" || true
+              done
+
+              # Sign all .dylib files
+              find "$MAC_APP" -name "*.dylib" -type f | while read -r lib; do
+                echo "Signing: $lib"
+                codesign --force --sign "$IDENTITY" --options runtime --entitlements entitlements.plist "$lib" || true
+              done
+
+              # Sign the Python executable and other binaries in MacOS folder
+              find "$MAC_APP/Contents/MacOS" -type f -perm +111 | while read -r bin; do
+                echo "Signing executable: $bin"
+                codesign --force --sign "$IDENTITY" --options runtime --entitlements entitlements.plist "$bin" || true
+              done
+
+              # Sign any framework bundles
+              find "$MAC_APP" -name "*.framework" -type d | while read -r framework; do
+                echo "Signing framework: $framework"
+                codesign --force --sign "$IDENTITY" --options runtime --entitlements entitlements.plist "$framework" || true
+              done
+
+              # Finally sign the whole app bundle
+              echo "Signing main app bundle..."
+              codesign --force --sign "$IDENTITY" --options runtime --entitlements entitlements.plist "$MAC_APP"
+
+              # Verify the signature
+              echo "Verifying signature..."
+              codesign --verify --deep --strict --verbose=2 "$MAC_APP" || echo "Warning: Signature verification had issues"
 
               # Create DMG staging folder with app and Applications symlink
               VERSION="${{ needs.version.outputs.version }}"
@@ -190,15 +242,32 @@ jobs:
               # Sign the DMG
               codesign --force --sign "$IDENTITY" "release/$DMG_NAME"
 
-              # Notarize
-              xcrun notarytool submit "release/$DMG_NAME" \
+              # Notarize and capture submission ID
+              echo "Submitting for notarization..."
+              SUBMIT_OUTPUT=$(xcrun notarytool submit "release/$DMG_NAME" \
                 --apple-id "$APPLE_ID" \
                 --password "$APPLE_PASSWORD" \
                 --team-id "$APPLE_TEAM_ID" \
-                --wait
+                --wait 2>&1) || true
+              echo "$SUBMIT_OUTPUT"
 
-              # Staple
-              xcrun stapler staple "release/$DMG_NAME"
+              # Extract submission ID and get log if failed
+              SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | grep -E "^\s*id:" | head -1 | awk '{print $2}')
+              if echo "$SUBMIT_OUTPUT" | grep -q "Invalid"; then
+                echo "Notarization failed, fetching log..."
+                xcrun notarytool log "$SUBMISSION_ID" \
+                  --apple-id "$APPLE_ID" \
+                  --password "$APPLE_PASSWORD" \
+                  --team-id "$APPLE_TEAM_ID" \
+                  notarization_log.json || true
+                cat notarization_log.json || true
+              fi
+
+              # Staple if successful
+              if echo "$SUBMIT_OUTPUT" | grep -q "Accepted"; then
+                echo "Notarization successful, stapling..."
+                xcrun stapler staple "release/$DMG_NAME"
+              fi
             else
               echo "No .app found after extraction"
             fi
@@ -208,7 +277,7 @@ jobs:
 
           # Cleanup
           security delete-keychain $KEYCHAIN_PATH
-          rm -f certificate.p12
+          rm -f certificate.p12 entitlements.plist
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
