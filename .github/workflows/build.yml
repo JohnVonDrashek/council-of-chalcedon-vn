@@ -83,24 +83,24 @@ jobs:
         run: |
           ./renpy-sdk/renpy.sh ./renpy-sdk/launcher distribute . --package ${{ matrix.platform }}
 
-      - name: Find and list build output
-        id: find_dists
+      - name: Find and rename build output
         run: |
+          echo "Looking for dists folder..."
+          ls -la
           DISTS_DIR=$(ls -d ${{ env.PROJECT_NAME }}-*-dists 2>/dev/null | head -1)
           if [ -z "$DISTS_DIR" ]; then
             echo "No dists folder found!"
-            ls -la
             exit 1
           fi
-          echo "dists_dir=$DISTS_DIR" >> $GITHUB_OUTPUT
           echo "Found: $DISTS_DIR"
-          ls -la "$DISTS_DIR"
+          mv "$DISTS_DIR" dists
+          ls -la dists/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.PROJECT_NAME }}-${{ matrix.platform }}
-          path: ${{ steps.find_dists.outputs.dists_dir }}/*
+          path: dists/*
 
   release:
     needs: [version, build]
@@ -118,7 +118,9 @@ jobs:
           path: artifacts
 
       - name: List artifacts
-        run: find artifacts -type f
+        run: |
+          echo "Contents of artifacts folder:"
+          ls -laR artifacts/ || echo "No artifacts folder"
 
       - name: Prepare release files
         run: |
