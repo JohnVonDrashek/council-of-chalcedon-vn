@@ -54,7 +54,7 @@ jobs:
           - os: ubuntu-latest
             platform: linux
           - os: ubuntu-latest
-            platform: windows
+            platform: win
           - os: macos-latest
             platform: mac
 
