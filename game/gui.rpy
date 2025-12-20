@@ -129,6 +129,7 @@ init -2:
     define gui.history_text_ypos = 3
     define gui.history_text_width = 1110
     define gui.history_text_xalign = 0.0
+    define gui.history_allow_tags = { "alt", "noalt", "rt", "rb", "art" }
 
     ## NVL Mode
     define gui.nvl_borders = Borders(0, 15, 0, 30)
