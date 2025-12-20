@@ -41,16 +41,16 @@ jobs:
 
       - name: Build for ${{ matrix.platform }}
         run: |
-          ./renpy-sdk/renpy.sh ./renpy-sdk/launcher distribute . --package ${{ matrix.platform }} --dest dist
+          ./renpy-sdk/renpy.sh ./renpy-sdk/launcher distribute . --package ${{ matrix.platform }}
 
       - name: List build output
-        run: ls -la dist/
+        run: ls -la ${{ env.PROJECT_NAME }}-dists/ || echo "No dists folder found"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.PROJECT_NAME }}-${{ matrix.platform }}
-          path: dist/*
+          path: ${{ env.PROJECT_NAME }}-dists/*
 
   release:
     needs: build
