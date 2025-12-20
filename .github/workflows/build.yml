@@ -208,12 +208,13 @@ jobs:
                 codesign --force --sign "$IDENTITY" --options runtime --timestamp --entitlements entitlements.plist "$lib" || true
               done
 
-              # Sign ALL executable files anywhere in the bundle (not just Contents/MacOS)
-              # This catches binaries in autorun/renpy-sdk/ and other locations
-              find "$MAC_APP" -type f -perm +111 ! -name "*.py" ! -name "*.sh" ! -name "*.rpy" | while read -r bin; do
+              # Sign ALL Mach-O binaries anywhere in the bundle
+              # Don't rely on execute permissions - check actual file type
+              echo "Scanning for all Mach-O binaries..."
+              find "$MAC_APP" -type f ! -name "*.py" ! -name "*.sh" ! -name "*.rpy" ! -name "*.txt" ! -name "*.json" ! -name "*.png" ! -name "*.jpg" ! -name "*.rpa" ! -name "*.rpyc" | while read -r bin; do
                 # Check if it's a Mach-O binary
-                if file "$bin" | grep -q "Mach-O"; then
-                  echo "Signing executable: $bin"
+                if file "$bin" 2>/dev/null | grep -q "Mach-O"; then
+                  echo "Signing Mach-O: $bin"
                   codesign --force --sign "$IDENTITY" --options runtime --timestamp --entitlements entitlements.plist "$bin" || true
                 fi
               done
