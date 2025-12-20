@@ -161,29 +161,42 @@ jobs:
           IDENTITY=$(security find-identity -v -p codesigning $KEYCHAIN_PATH | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)".*/\1/')
           echo "Signing with: $IDENTITY"
 
-          # Find and sign the app
-          MAC_APP=$(find artifacts -name "*.app" -type d | head -1)
-          if [ -n "$MAC_APP" ]; then
-            # Sign the app
-            codesign --force --deep --sign "$IDENTITY" --options runtime "$MAC_APP"
+          # Find and extract the mac zip to get the .app
+          MAC_ZIP=$(find artifacts -name "*-mac.zip" | head -1)
+          if [ -n "$MAC_ZIP" ]; then
+            echo "Found mac zip: $MAC_ZIP"
+            mkdir -p mac_extracted
+            unzip -o "$MAC_ZIP" -d mac_extracted
 
-            # Create DMG
-            VERSION="${{ needs.version.outputs.version }}"
-            DMG_NAME="${{ env.PROJECT_NAME }}-${VERSION}-macOS.dmg"
-            hdiutil create -volname "${{ env.APP_NAME }}" -srcfolder "$MAC_APP" -ov -format UDZO "release/$DMG_NAME"
+            MAC_APP=$(find mac_extracted -name "*.app" -type d | head -1)
+            echo "Found app: $MAC_APP"
 
-            # Sign the DMG
-            codesign --force --sign "$IDENTITY" "release/$DMG_NAME"
+            if [ -n "$MAC_APP" ]; then
+              # Sign the app
+              codesign --force --deep --sign "$IDENTITY" --options runtime "$MAC_APP"
 
-            # Notarize
-            xcrun notarytool submit "release/$DMG_NAME" \
-              --apple-id "$APPLE_ID" \
-              --password "$APPLE_PASSWORD" \
-              --team-id "$APPLE_TEAM_ID" \
-              --wait
+              # Create DMG
+              VERSION="${{ needs.version.outputs.version }}"
+              DMG_NAME="${{ env.PROJECT_NAME }}-${VERSION}-macOS.dmg"
+              hdiutil create -volname "${{ env.APP_NAME }}" -srcfolder "$MAC_APP" -ov -format UDZO "release/$DMG_NAME"
 
-            # Staple
-            xcrun stapler staple "release/$DMG_NAME"
+              # Sign the DMG
+              codesign --force --sign "$IDENTITY" "release/$DMG_NAME"
+
+              # Notarize
+              xcrun notarytool submit "release/$DMG_NAME" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" \
+                --wait
+
+              # Staple
+              xcrun stapler staple "release/$DMG_NAME"
+            else
+              echo "No .app found after extraction"
+            fi
+          else
+            echo "No mac zip found"
           fi
 
           # Cleanup
