@@ -241,19 +241,28 @@ jobs:
               echo "Verifying signature..."
               codesign --verify --deep --strict --verbose=2 "$MAC_APP" || echo "Warning: Signature verification had issues"
 
-              # Create DMG staging folder with app and Applications symlink
+              # Create professional DMG with proper installer layout
               VERSION="${{ needs.version.outputs.version }}"
               DMG_NAME="${{ env.PROJECT_NAME }}-${VERSION}-macOS.dmg"
-              DMG_STAGING="dmg_staging"
-              mkdir -p "$DMG_STAGING"
-              cp -R "$MAC_APP" "$DMG_STAGING/"
-              ln -s /Applications "$DMG_STAGING/Applications"
 
-              # Create DMG with proper layout
-              hdiutil create -volname "${{ env.APP_NAME }}" -srcfolder "$DMG_STAGING" -ov -format UDZO "release/$DMG_NAME"
+              # Install create-dmg for professional DMG creation
+              brew install create-dmg
+
+              # Create DMG with proper icon positioning and styling
+              create-dmg \
+                --volname "${{ env.APP_NAME }}" \
+                --window-pos 200 120 \
+                --window-size 600 400 \
+                --icon-size 100 \
+                --icon "CouncilOfChalcedon.app" 150 185 \
+                --hide-extension "CouncilOfChalcedon.app" \
+                --app-drop-link 450 185 \
+                --no-internet-enable \
+                "release/$DMG_NAME" \
+                "$MAC_APP"
 
               # Sign the DMG
-              codesign --force --sign "$IDENTITY" "release/$DMG_NAME"
+              codesign --force --sign "$IDENTITY" --timestamp "release/$DMG_NAME"
 
               # Notarize and capture submission ID
               echo "Submitting for notarization..."
