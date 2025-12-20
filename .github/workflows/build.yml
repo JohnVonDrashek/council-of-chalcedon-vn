@@ -222,71 +222,60 @@ jobs:
           # Copy icon to app directory
           Copy-Item "icon.ico" -Destination $appDir.FullName -ErrorAction SilentlyContinue
 
-          # Create a simple WiX source that harvests all files
+          # First, harvest all files using wix heat
+          Write-Host "Harvesting files from $($appDir.FullName)..."
+          wix heat dir $appDir.FullName -cg ProductComponents -dr INSTALLFOLDER -srd -sreg -gg -sfrag -out files.wxs
+
+          # Create main installer WiX source
           $wxs = @"
           <?xml version="1.0" encoding="UTF-8"?>
           <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
                xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
-
             <Package Name="Council of Chalcedon"
                      Version="$env:VERSION"
                      Manufacturer="John VonDrashek"
                      UpgradeCode="8B5E8A3C-9F4D-4E6A-B7C8-2D1E0F3A4B5C"
                      Scope="perUser">
-
               <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
-              <MediaTemplate EmbedCab="yes" />
-
-              <Icon Id="AppIcon" SourceFile="$($appDir.FullName)\icon.ico" />
+              <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+              <Icon Id="AppIcon" SourceFile="icon.ico" />
               <Property Id="ARPPRODUCTICON" Value="AppIcon" />
-
+              <Property Id="ARPHELPLINK" Value="https://github.com/JohnVonDrashek/council-of-chalcedon-vn" />
               <StandardDirectory Id="LocalAppDataFolder">
-                <Directory Id="INSTALLFOLDER" Name="Council of Chalcedon">
-                  <Component Id="AppFiles" Guid="*">
-                    <Files Include="$($appDir.FullName)\**" />
-                  </Component>
-                </Directory>
+                <Directory Id="INSTALLFOLDER" Name="Council of Chalcedon" />
               </StandardDirectory>
-
               <StandardDirectory Id="ProgramMenuFolder">
                 <Directory Id="ProgramMenuDir" Name="Council of Chalcedon">
-                  <Component Id="StartMenuShortcut" Guid="*">
-                    <Shortcut Id="StartMenuShortcut"
-                              Name="Council of Chalcedon"
-                              Target="[INSTALLFOLDER]CouncilOfChalcedon.exe"
-                              WorkingDirectory="INSTALLFOLDER" />
+                  <Component Id="StartMenuShortcut" Guid="a1b2c3d4-e5f6-7890-abcd-ef1234567890">
+                    <Shortcut Id="StartMenuShortcut" Name="Council of Chalcedon" Target="[INSTALLFOLDER]CouncilOfChalcedon.exe" WorkingDirectory="INSTALLFOLDER" Icon="AppIcon" />
                     <RemoveFolder Id="ProgramMenuDir" On="uninstall" />
                     <RegistryValue Root="HKCU" Key="Software\CouncilOfChalcedon" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
                   </Component>
                 </Directory>
               </StandardDirectory>
-
               <StandardDirectory Id="DesktopFolder">
-                <Component Id="DesktopShortcut" Guid="*">
-                  <Shortcut Id="DesktopShortcut"
-                            Name="Council of Chalcedon"
-                            Target="[INSTALLFOLDER]CouncilOfChalcedon.exe"
-                            WorkingDirectory="INSTALLFOLDER" />
+                <Component Id="DesktopShortcut" Guid="b2c3d4e5-f6a7-8901-bcde-f23456789012">
+                  <Shortcut Id="DesktopShortcut" Name="Council of Chalcedon" Target="[INSTALLFOLDER]CouncilOfChalcedon.exe" WorkingDirectory="INSTALLFOLDER" Icon="AppIcon" />
                   <RegistryValue Root="HKCU" Key="Software\CouncilOfChalcedon" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
                 </Component>
               </StandardDirectory>
-
               <Feature Id="ProductFeature" Title="Council of Chalcedon">
-                <ComponentRef Id="AppFiles" />
+                <ComponentGroupRef Id="ProductComponents" />
                 <ComponentRef Id="StartMenuShortcut" />
                 <ComponentRef Id="DesktopShortcut" />
               </Feature>
-
               <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
             </Package>
           </Wix>
           "@
 
           $wxs | Out-File -FilePath "installer.wxs" -Encoding UTF8
+          Write-Host "Main installer.wxs:"
           Get-Content "installer.wxs"
 
-          # Build MSI
-          wix build installer.wxs -ext WixToolset.UI.wixext -o "CouncilOfChalcedon-$env:VERSION-win.msi"
+          # Build MSI with both files
+          Write-Host "Building MSI..."
+          wix build installer.wxs files.wxs -ext WixToolset.UI.wixext -bindpath $appDir.FullName -o "CouncilOfChalcedon-$env:VERSION-win.msi"
 
       - name: Upload MSI artifact
         uses: actions/upload-artifact@v4
