@@ -47,11 +47,12 @@ The app is signed and notarized by Apple.
 
 Download the latest release for your platform from the [Releases page](https://github.com/JohnVonDrashek/council-of-chalcedon-vn/releases/latest):
 
-| Platform | File |
-|----------|------|
-| **Windows** | `CouncilOfChalcedon-*-win.zip` |
-| **macOS** | `CouncilOfChalcedon-*-macOS.dmg` |
-| **Linux** | `CouncilOfChalcedon-*-linux.tar.bz2` |
+| Platform | File | Notes |
+|----------|------|-------|
+| **Windows (Installer)** | `CouncilOfChalcedon-*-win.msi` | Recommended - creates shortcuts |
+| **Windows (Portable)** | `CouncilOfChalcedon-*-win.zip` | No installation required |
+| **macOS** | `CouncilOfChalcedon-*-macOS.dmg` | Signed and notarized |
+| **Linux** | `CouncilOfChalcedon-*-linux.tar.bz2` | Extract and run |
 
 ## Screenshots
 

@@ -103,8 +103,119 @@ jobs:
           name: ${{ env.PROJECT_NAME }}-${{ matrix.platform }}
           path: dists/*
 
-  release:
+  msi:
     needs: [version, build]
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.PROJECT_NAME }}-win
+          path: win-artifact
+
+      - name: Extract Windows build
+        shell: pwsh
+        run: |
+          $zipFile = Get-ChildItem -Path win-artifact -Filter "*.zip" | Select-Object -First 1
+          Write-Host "Extracting: $($zipFile.FullName)"
+          Expand-Archive -Path $zipFile.FullName -DestinationPath "app" -Force
+          Get-ChildItem -Path app -Recurse | Select-Object FullName
+
+      - name: Install WiX Toolset
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 4.0.5
+          wix extension add WixToolset.UI.wixext/4.0.5
+
+      - name: Create MSI installer
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          $appDir = Get-ChildItem -Path app -Directory | Select-Object -First 1
+          Write-Host "App directory: $($appDir.FullName)"
+
+          # Copy icon to app directory
+          Copy-Item "icon.ico" -Destination $appDir.FullName -ErrorAction SilentlyContinue
+
+          # Create a simple WiX source that harvests all files
+          $wxs = @"
+          <?xml version="1.0" encoding="UTF-8"?>
+          <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+               xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+            <Package Name="Council of Chalcedon"
+                     Version="$env:VERSION"
+                     Manufacturer="John VonDrashek"
+                     UpgradeCode="8B5E8A3C-9F4D-4E6A-B7C8-2D1E0F3A4B5C"
+                     Scope="perUser">
+
+              <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+              <MediaTemplate EmbedCab="yes" />
+
+              <Icon Id="AppIcon" SourceFile="$($appDir.FullName)\icon.ico" />
+              <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+
+              <StandardDirectory Id="LocalAppDataFolder">
+                <Directory Id="INSTALLFOLDER" Name="Council of Chalcedon">
+                  <Component Id="AppFiles" Guid="*">
+                    <Files Include="$($appDir.FullName)\**" />
+                  </Component>
+                </Directory>
+              </StandardDirectory>
+
+              <StandardDirectory Id="ProgramMenuFolder">
+                <Directory Id="ProgramMenuDir" Name="Council of Chalcedon">
+                  <Component Id="StartMenuShortcut" Guid="*">
+                    <Shortcut Id="StartMenuShortcut"
+                              Name="Council of Chalcedon"
+                              Target="[INSTALLFOLDER]CouncilOfChalcedon.exe"
+                              WorkingDirectory="INSTALLFOLDER" />
+                    <RemoveFolder Id="ProgramMenuDir" On="uninstall" />
+                    <RegistryValue Root="HKCU" Key="Software\CouncilOfChalcedon" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+                  </Component>
+                </Directory>
+              </StandardDirectory>
+
+              <StandardDirectory Id="DesktopFolder">
+                <Component Id="DesktopShortcut" Guid="*">
+                  <Shortcut Id="DesktopShortcut"
+                            Name="Council of Chalcedon"
+                            Target="[INSTALLFOLDER]CouncilOfChalcedon.exe"
+                            WorkingDirectory="INSTALLFOLDER" />
+                  <RegistryValue Root="HKCU" Key="Software\CouncilOfChalcedon" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+                </Component>
+              </StandardDirectory>
+
+              <Feature Id="ProductFeature" Title="Council of Chalcedon">
+                <ComponentRef Id="AppFiles" />
+                <ComponentRef Id="StartMenuShortcut" />
+                <ComponentRef Id="DesktopShortcut" />
+              </Feature>
+
+              <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+            </Package>
+          </Wix>
+          "@
+
+          $wxs | Out-File -FilePath "installer.wxs" -Encoding UTF8
+          Get-Content "installer.wxs"
+
+          # Build MSI
+          wix build installer.wxs -ext WixToolset.UI.wixext -o "CouncilOfChalcedon-$env:VERSION-win.msi"
+
+      - name: Upload MSI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PROJECT_NAME }}-msi
+          path: "*.msi"
+
+  release:
+    needs: [version, build, msi]
     runs-on: macos-latest
     permissions:
       contents: write
@@ -127,10 +238,11 @@ jobs:
         run: |
           mkdir -p release
 
-          # Find and rename files
+          # Find and copy release files
           find artifacts -name "*.zip" -exec cp {} release/ \;
           find artifacts -name "*.tar.bz2" -exec cp {} release/ \;
           find artifacts -name "*.dmg" -exec cp {} release/ \;
+          find artifacts -name "*.msi" -exec cp {} release/ \;
           find artifacts -name "*.app" -type d -exec sh -c 'cd "$(dirname "{}")" && zip -r "../$(basename "{}").zip" "$(basename "{}")"' \;
 
           ls -la release/
@@ -312,7 +424,8 @@ jobs:
             An educational kinetic novel re-enacting the Fourth Ecumenical Council (451 AD).
 
             ### Downloads
-            - **Windows**: `*-win.zip`
+            - **Windows (Installer)**: `*-win.msi` - Recommended, creates Start Menu and Desktop shortcuts
+            - **Windows (Portable)**: `*-win.zip` - No installation required
             - **macOS**: `*-macOS.dmg` (signed and notarized)
             - **Linux**: `*-linux.tar.bz2`
 
