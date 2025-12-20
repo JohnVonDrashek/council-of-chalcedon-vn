@@ -1,5 +1,9 @@
 # The Council of Chalcedon - Visual Novel
 
+<p align="center">
+  <img src="icon.png" alt="Council of Chalcedon" width="200">
+</p>
+
 [![Ren'Py](https://img.shields.io/badge/Ren'Py-8.0+-red.svg)](https://www.renpy.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://www.renpy.org/)
