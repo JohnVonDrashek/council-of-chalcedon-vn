@@ -1,7 +1,7 @@
 ## Council of Chalcedon - Ren'Py Configuration
 
 define config.name = _("Council of Chalcedon")
-define config.version = "1.0.34"
+define config.version = "1.0.36"
 
 define gui.show_name = True
 define gui.about = _p("""
