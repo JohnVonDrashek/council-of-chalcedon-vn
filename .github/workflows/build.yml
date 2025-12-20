@@ -198,31 +198,43 @@ jobs:
 
               # Sign all .so files (Python extensions)
               find "$MAC_APP" -name "*.so" -type f | while read -r lib; do
-                echo "Signing: $lib"
-                codesign --force --sign "$IDENTITY" --options runtime --entitlements entitlements.plist "$lib" || true
+                echo "Signing .so: $lib"
+                codesign --force --sign "$IDENTITY" --options runtime --timestamp --entitlements entitlements.plist "$lib" || true
               done
 
               # Sign all .dylib files
               find "$MAC_APP" -name "*.dylib" -type f | while read -r lib; do
-                echo "Signing: $lib"
-                codesign --force --sign "$IDENTITY" --options runtime --entitlements entitlements.plist "$lib" || true
+                echo "Signing .dylib: $lib"
+                codesign --force --sign "$IDENTITY" --options runtime --timestamp --entitlements entitlements.plist "$lib" || true
               done
 
-              # Sign the Python executable and other binaries in MacOS folder
-              find "$MAC_APP/Contents/MacOS" -type f -perm +111 | while read -r bin; do
-                echo "Signing executable: $bin"
-                codesign --force --sign "$IDENTITY" --options runtime --entitlements entitlements.plist "$bin" || true
+              # Sign ALL executable files anywhere in the bundle (not just Contents/MacOS)
+              # This catches binaries in autorun/renpy-sdk/ and other locations
+              find "$MAC_APP" -type f -perm +111 ! -name "*.py" ! -name "*.sh" ! -name "*.rpy" | while read -r bin; do
+                # Check if it's a Mach-O binary
+                if file "$bin" | grep -q "Mach-O"; then
+                  echo "Signing executable: $bin"
+                  codesign --force --sign "$IDENTITY" --options runtime --timestamp --entitlements entitlements.plist "$bin" || true
+                fi
               done
 
-              # Sign any framework bundles
-              find "$MAC_APP" -name "*.framework" -type d | while read -r framework; do
+              # Sign any framework bundles (innermost first)
+              find "$MAC_APP" -name "*.framework" -type d -depth | while read -r framework; do
                 echo "Signing framework: $framework"
-                codesign --force --sign "$IDENTITY" --options runtime --entitlements entitlements.plist "$framework" || true
+                codesign --force --sign "$IDENTITY" --options runtime --timestamp --entitlements entitlements.plist "$framework" || true
               done
 
-              # Finally sign the whole app bundle
+              # Sign any nested .app bundles (innermost first) - like renpy.app
+              find "$MAC_APP" -name "*.app" -type d -depth | while read -r nested_app; do
+                if [ "$nested_app" != "$MAC_APP" ]; then
+                  echo "Signing nested app: $nested_app"
+                  codesign --force --sign "$IDENTITY" --options runtime --timestamp --entitlements entitlements.plist "$nested_app" || true
+                fi
+              done
+
+              # Finally sign the main app bundle
               echo "Signing main app bundle..."
-              codesign --force --sign "$IDENTITY" --options runtime --entitlements entitlements.plist "$MAC_APP"
+              codesign --force --sign "$IDENTITY" --options runtime --timestamp --entitlements entitlements.plist "$MAC_APP"
 
               # Verify the signature
               echo "Verifying signature..."
