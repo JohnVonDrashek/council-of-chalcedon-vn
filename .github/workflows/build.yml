@@ -273,7 +273,7 @@ jobs:
               strategy :github_latest
             end
 
-            app "Council of Chalcedon.app"
+            app "CouncilOfChalcedon.app"
 
             zap trash: [
               "~/Library/Saved Application State/com.renpy.councilofchalcedon.savedState",
