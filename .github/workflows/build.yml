@@ -1,0 +1,217 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  RENPY_VERSION: "8.3.3"
+  PROJECT_NAME: "CouncilOfChalcedon"
+  APP_NAME: "Council of Chalcedon"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: ubuntu-latest
+            platform: windows
+          - os: macos-latest
+            platform: mac
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Download Ren'Py SDK
+        run: |
+          curl -L -o renpy-sdk.tar.bz2 "https://www.renpy.org/dl/${{ env.RENPY_VERSION }}/renpy-${{ env.RENPY_VERSION }}-sdk.tar.bz2"
+          tar xjf renpy-sdk.tar.bz2
+          mv renpy-${{ env.RENPY_VERSION }}-sdk renpy-sdk
+
+      - name: Build for ${{ matrix.platform }}
+        run: |
+          ./renpy-sdk/renpy.sh ./renpy-sdk/launcher distribute . --package ${{ matrix.platform }} --dest dist
+
+      - name: List build output
+        run: ls -la dist/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PROJECT_NAME }}-${{ matrix.platform }}
+          path: dist/*
+
+  release:
+    needs: build
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f
+
+      - name: Get version from commit
+        id: version
+        run: |
+          VERSION="1.0.$(git rev-list --count HEAD)"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+
+          # Find and rename files
+          find artifacts -name "*.zip" -exec cp {} release/ \;
+          find artifacts -name "*.tar.bz2" -exec cp {} release/ \;
+          find artifacts -name "*.dmg" -exec cp {} release/ \;
+          find artifacts -name "*.app" -type d -exec sh -c 'cd "$(dirname "{}")" && zip -r "../$(basename "{}").zip" "$(basename "{}")"' \;
+
+          ls -la release/
+
+      - name: Sign and Notarize macOS build
+        if: env.CERTIFICATE_P12_BASE64 != ''
+        env:
+          CERTIFICATE_P12_BASE64: ${{ secrets.CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # Create keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # Import certificate
+          echo "$CERTIFICATE_P12_BASE64" | base64 --decode > certificate.p12
+          security import certificate.p12 -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # Find the signing identity
+          IDENTITY=$(security find-identity -v -p codesigning $KEYCHAIN_PATH | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "Signing with: $IDENTITY"
+
+          # Find and sign the app
+          MAC_APP=$(find artifacts -name "*.app" -type d | head -1)
+          if [ -n "$MAC_APP" ]; then
+            # Sign the app
+            codesign --force --deep --sign "$IDENTITY" --options runtime "$MAC_APP"
+
+            # Create DMG
+            DMG_NAME="${{ env.PROJECT_NAME }}-${{ steps.version.outputs.version }}-macOS.dmg"
+            hdiutil create -volname "${{ env.APP_NAME }}" -srcfolder "$MAC_APP" -ov -format UDZO "release/$DMG_NAME"
+
+            # Sign the DMG
+            codesign --force --sign "$IDENTITY" "release/$DMG_NAME"
+
+            # Notarize
+            xcrun notarytool submit "release/$DMG_NAME" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" \
+              --wait
+
+            # Staple
+            xcrun stapler staple "release/$DMG_NAME"
+          fi
+
+          # Cleanup
+          security delete-keychain $KEYCHAIN_PATH
+          rm -f certificate.p12
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Release v${{ steps.version.outputs.version }}
+          body: |
+            ## The Council of Chalcedon - Visual Novel v${{ steps.version.outputs.version }}
+
+            An educational kinetic novel re-enacting the Fourth Ecumenical Council (451 AD).
+
+            ### Downloads
+            - **Windows**: `*-win.zip`
+            - **macOS**: `*-macOS.dmg` (signed and notarized)
+            - **Linux**: `*-linux.tar.bz2`
+
+            ### macOS Installation via Homebrew
+            ```bash
+            brew tap JohnVonDrashek/tap
+            brew install --cask council-of-chalcedon
+            ```
+          files: release/*
+          draft: false
+          prerelease: false
+
+      - name: Update Homebrew Tap
+        if: success()
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          # Get the DMG URL and SHA
+          VERSION="${{ steps.version.outputs.version }}"
+          DMG_NAME="${{ env.PROJECT_NAME }}-${VERSION}-macOS.dmg"
+          DMG_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/${DMG_NAME}"
+
+          # Calculate SHA256 of the DMG
+          SHA256=$(shasum -a 256 "release/${DMG_NAME}" | cut -d' ' -f1)
+
+          # Clone the tap repo
+          git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/JohnVonDrashek/homebrew-tap.git tap-repo
+          cd tap-repo
+
+          # Create/update the cask
+          cat > Casks/council-of-chalcedon.rb << EOF
+          cask "council-of-chalcedon" do
+            version "${VERSION}"
+            sha256 "${SHA256}"
+
+            url "${DMG_URL}"
+            name "Council of Chalcedon"
+            desc "Educational visual novel re-enacting the Fourth Ecumenical Council (451 AD)"
+            homepage "https://github.com/JohnVonDrashek/council-of-chalcedon-vn"
+
+            livecheck do
+              url :url
+              strategy :github_latest
+            end
+
+            app "Council of Chalcedon.app"
+
+            zap trash: [
+              "~/Library/Saved Application State/com.renpy.councilofchalcedon.savedState",
+              "~/Library/RenPy/CouncilOfChalcedon",
+            ]
+          end
+          EOF
+
+          # Commit and push
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add Casks/council-of-chalcedon.rb
+          git commit -m "Update council-of-chalcedon to v${VERSION}" || echo "No changes to commit"
+          git push
