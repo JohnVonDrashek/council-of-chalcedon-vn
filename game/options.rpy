@@ -45,7 +45,7 @@ define config.nvl_paged_rollback = True
 ## Save/Load configuration
 
 define config.save_directory = "CouncilOfChalcedon-1704067200"
-define config.window_icon = None
+define config.window_icon = "gui/window_icon.png"
 
 ## Build configuration
 
@@ -57,3 +57,8 @@ init python:
     build.classify('**/thumbs.db', None)
     build.documentation('*.html')
     build.documentation('*.txt')
+
+    # Application icons
+    build.icon = "icon.png"
+    build.windows_icon = "icon.ico"
+    build.mac_icon = "icon.icns"
