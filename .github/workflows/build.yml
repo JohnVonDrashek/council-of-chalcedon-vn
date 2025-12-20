@@ -176,10 +176,16 @@ jobs:
               # Sign the app
               codesign --force --deep --sign "$IDENTITY" --options runtime "$MAC_APP"
 
-              # Create DMG
+              # Create DMG staging folder with app and Applications symlink
               VERSION="${{ needs.version.outputs.version }}"
               DMG_NAME="${{ env.PROJECT_NAME }}-${VERSION}-macOS.dmg"
-              hdiutil create -volname "${{ env.APP_NAME }}" -srcfolder "$MAC_APP" -ov -format UDZO "release/$DMG_NAME"
+              DMG_STAGING="dmg_staging"
+              mkdir -p "$DMG_STAGING"
+              cp -R "$MAC_APP" "$DMG_STAGING/"
+              ln -s /Applications "$DMG_STAGING/Applications"
+
+              # Create DMG with proper layout
+              hdiutil create -volname "${{ env.APP_NAME }}" -srcfolder "$DMG_STAGING" -ov -format UDZO "release/$DMG_NAME"
 
               # Sign the DMG
               codesign --force --sign "$IDENTITY" "release/$DMG_NAME"
