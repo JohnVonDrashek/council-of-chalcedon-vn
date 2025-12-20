@@ -49,7 +49,7 @@ Download the latest release for your platform from the [Releases page](https://g
 
 | Platform | File | Notes |
 |----------|------|-------|
-| **Windows (Installer)** | `CouncilOfChalcedon-*-win.msi` | Recommended - creates shortcuts |
+| **Windows (Installer)** | `CouncilOfChalcedon-*-win-setup.exe` | Recommended - creates shortcuts |
 | **Windows (Portable)** | `CouncilOfChalcedon-*-win.zip` | No installation required |
 | **macOS** | `CouncilOfChalcedon-*-macOS.dmg` | Signed and notarized |
 | **Linux (AppImage)** | `CouncilOfChalcedon-*-linux.AppImage` | Recommended - runs on any distro |
