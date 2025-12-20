@@ -29,6 +29,17 @@ https://www.newadvent.org/fathers/3811.htm
 - **Documentary narration** providing historical context
 - **Verbatim quotes** from the council records
 
+## Screenshots
+
+<p align="center">
+  <img src="screenshots/title.png" alt="Title Screen" width="400">
+  <img src="screenshots/intro.png" alt="Introduction" width="400">
+</p>
+<p align="center">
+  <img src="screenshots/the-accused.png" alt="The Accused" width="400">
+  <img src="screenshots/canon-1.png" alt="Canon Display" width="400">
+</p>
+
 ## Key Figures
 
 | Character | Role |
