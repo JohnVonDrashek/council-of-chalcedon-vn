@@ -9,6 +9,10 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://www.renpy.org/)
 [![GitHub Release](https://img.shields.io/github/v/release/JohnVonDrashek/council-of-chalcedon-vn)](https://github.com/JohnVonDrashek/council-of-chalcedon-vn/releases/latest)
 
+<p align="center">
+  <img src="demo.gif" alt="Gameplay Demo" width="600">
+</p>
+
 An educational kinetic novel re-enacting the Fourth Ecumenical Council (451 AD). Experience history through the actual words of the bishops, emperors, and legates who shaped Christian doctrine.
 
 ## Overview
